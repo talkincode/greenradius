@@ -3,8 +3,6 @@ package rfc2868
 import (
 	"bytes"
 	"testing"
-
-	"layeh.com/radius"
 )
 
 func Test_TunnelPasswordAdd(t *testing.T) {

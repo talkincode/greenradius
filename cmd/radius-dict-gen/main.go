@@ -9,8 +9,8 @@ import (
 	"sort"
 	"strings"
 
-	"layeh.com/radius/dictionary"
-	"layeh.com/radius/dictionarygen"
+	"github.com/talkincode/greenradius/dictionary"
+	"github.com/talkincode/greenradius/dictionarygen"
 )
 
 type Refs map[string]string

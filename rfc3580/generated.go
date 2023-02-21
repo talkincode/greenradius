@@ -3,9 +3,9 @@
 package rfc3580
 
 import (
-	. "layeh.com/radius/rfc2865"
-	. "layeh.com/radius/rfc2866"
-	. "layeh.com/radius/rfc2868"
+	. "github.com/talkincode/greenradius/rfc2865"
+	. "github.com/talkincode/greenradius/rfc2866"
+	. "github.com/talkincode/greenradius/rfc2868"
 )
 
 func init() {

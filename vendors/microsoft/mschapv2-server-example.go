@@ -1,4 +1,5 @@
-//+build ignore
+//go:build ignore
+// +build ignore
 
 package main
 
@@ -6,13 +7,12 @@ import (
 	"bytes"
 	"log"
 
-	"layeh.com/radius"
-	"layeh.com/radius/rfc2759"
-	"layeh.com/radius/rfc2865"
-	"layeh.com/radius/rfc2868"
-	"layeh.com/radius/rfc2869"
-	"layeh.com/radius/rfc3079"
-	"layeh.com/radius/vendors/microsoft"
+	"github.com/talkincode/greenradius/rfc2759"
+	"github.com/talkincode/greenradius/rfc2865"
+	"github.com/talkincode/greenradius/rfc2868"
+	"github.com/talkincode/greenradius/rfc2869"
+	"github.com/talkincode/greenradius/rfc3079"
+	"github.com/talkincode/greenradius/vendors/microsoft"
 )
 
 const (

@@ -3,7 +3,7 @@
 package rfc7055
 
 import (
-	"layeh.com/radius"
+	"github.com/talkincode/greenradius"
 )
 
 const (

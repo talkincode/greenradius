@@ -3,7 +3,7 @@ package dictionarygen
 import (
 	"io"
 
-	"layeh.com/radius/dictionary"
+	"github.com/talkincode/greenradius/dictionary"
 )
 
 func (g *Generator) genVendor(w io.Writer, vendor *dictionary.Vendor) {

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"layeh.com/radius/dictionary"
+	"github.com/talkincode/greenradius/dictionary"
 )
 
 func TestTestData(t *testing.T) {

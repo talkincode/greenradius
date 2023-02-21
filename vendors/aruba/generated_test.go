@@ -2,9 +2,6 @@ package aruba_test
 
 import (
 	"testing"
-
-	"layeh.com/radius"
-	. "layeh.com/radius/vendors/aruba"
 )
 
 func TestLookup(t *testing.T) {

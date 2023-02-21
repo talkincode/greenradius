@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"net"
 	"testing"
-
-	"layeh.com/radius"
 )
 
 func TestEncryptedAttributes(t *testing.T) {

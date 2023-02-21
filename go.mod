@@ -1,8 +1,8 @@
-module layeh.com/radius
+module github.com/talkincode/greenradius
 
-go 1.12
+go 1.19
 
 require (
-	golang.org/x/crypto v0.0.0-20200709230013-948cd5f35899
-	golang.org/x/text v0.3.3
+	golang.org/x/crypto v0.6.0
+	golang.org/x/text v0.7.0
 )

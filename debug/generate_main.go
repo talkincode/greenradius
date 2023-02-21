@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 package main
@@ -8,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"layeh.com/radius/dictionary"
+	"github.com/talkincode/greenradius/dictionary"
 )
 
 func main() {
@@ -52,7 +53,7 @@ func main() {
 	fmt.Fprintln(w, "")
 	fmt.Fprintln(w, "package debug")
 	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, `import "layeh.com/radius/dictionary"`)
+	fmt.Fprintln(w, `import "github.com/talkincode/greenradius/dictionary"`)
 	fmt.Fprintln(w, "")
 	fmt.Fprintf(w, "var IncludedDictionary = %#v\n", dict)
 }

@@ -1,0 +1,6 @@
+.idea
+.vscode
+release
+__debug_bin
+.DS_Store
+/.fleet/

@@ -3,8 +3,6 @@ package rfc2869
 import (
 	"bytes"
 	"testing"
-
-	"layeh.com/radius"
 )
 
 func TestEAPMessage(t *testing.T) {

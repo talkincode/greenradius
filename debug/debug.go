@@ -12,8 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"layeh.com/radius"
-	"layeh.com/radius/dictionary"
+	"github.com/talkincode/greenradius/dictionary"
 )
 
 type Config struct {

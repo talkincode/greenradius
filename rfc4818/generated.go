@@ -5,7 +5,7 @@ package rfc4818
 import (
 	"net"
 
-	"layeh.com/radius"
+	"github.com/talkincode/greenradius"
 )
 
 const (

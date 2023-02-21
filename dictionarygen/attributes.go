@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"layeh.com/radius/dictionary"
+	"github.com/talkincode/greenradius/dictionary"
 )
 
 func (g *Generator) genAttributeStringOctets(w io.Writer, attr *dictionary.Attribute, vendor *dictionary.Vendor) {

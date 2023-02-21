@@ -4,7 +4,7 @@ import (
 	"crypto/sha1"
 	"errors"
 
-	"layeh.com/radius/rfc2759"
+	"github.com/talkincode/greenradius/rfc2759"
 )
 
 // KeyLength is the length of keys involved with the functions below

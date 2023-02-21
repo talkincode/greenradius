@@ -1,51 +1,55 @@
 package radius
 
 import (
+	"bufio"
 	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/binary"
 	"errors"
-	"log"
+	"io"
 	"net"
+	"os"
 	"sync"
 	"sync/atomic"
-
-	"github.com/talkincode/greenradius/rfc2865"
+	"time"
+	"unsafe"
 )
 
-var defaultSecret = []byte("secret")
-var radsecSecret = []byte("radsec")
-
-type packetResponseWriter struct {
+type radsecPacketResponseWriter struct {
 	// listener that received the packet
-	conn net.PacketConn
+	conn net.Conn
 	addr net.Addr
 }
 
-func (r *packetResponseWriter) Write(packet *Packet) error {
+type RadsecHandler interface {
+	ServeRADIUS(w ResponseWriter, r *Request)
+}
+
+func (r *radsecPacketResponseWriter) Write(packet *Packet) error {
 	encoded, err := packet.Encode()
 	if err != nil {
 		return err
 	}
-	if _, err := r.conn.WriteTo(encoded, r.addr); err != nil {
+	if _, err := r.conn.Write(encoded); err != nil {
 		return err
 	}
 	return nil
 }
 
-// PacketServer listens for RADIUS requests on a packet-based protocols (e.g.
+// RadsecPacketServer listens for RADIUS requests on a packet-based protocols (e.g.
 // UDP).
-type PacketServer struct {
+type RadsecPacketServer struct {
 	// The address on which the server listens. Defaults to :1812.
 	Addr string
-
-	// The network on which the server listens. Defaults to udp.
-	Network string
 
 	// The source from which the secret is obtained for parsing and validating
 	// the request.
 	SecretSource SecretSource
 
 	// Handler which is called to process the request.
-	Handler Handler
+	Handler RadsecHandler
 
 	// Skip incoming packet authenticity validation.
 	// This should only be set to true for debugging purposes.
@@ -54,48 +58,73 @@ type PacketServer struct {
 	// ErrorLog specifies an optional logger for errors
 	// around packet accepting, processing, and validation.
 	// If nil, logging is done via the log package's standard logger.
-	ErrorLog *log.Logger
+	// ErrorLog *log.Logger
 
 	shutdownRequested int32
 
 	mu          sync.Mutex
 	ctx         context.Context
 	ctxDone     context.CancelFunc
-	listeners   map[net.PacketConn]uint
+	listeners   map[net.Conn]uint
 	lastActive  chan struct{} // closed when the last active item finishes
 	activeCount int32
 }
 
-func (s *PacketServer) initLocked() {
+func (s *RadsecPacketServer) initLocked() {
 	if s.ctx == nil {
 		s.ctx, s.ctxDone = context.WithCancel(context.Background())
-		s.listeners = make(map[net.PacketConn]uint)
+		s.listeners = make(map[net.Conn]uint)
 		s.lastActive = make(chan struct{})
 	}
 }
 
-func (s *PacketServer) activeAdd() {
+func (s *RadsecPacketServer) activeAdd() {
 	atomic.AddInt32(&s.activeCount, 1)
 }
 
-func (s *PacketServer) activeDone() {
+func (s *RadsecPacketServer) activeDone() {
 	if atomic.AddInt32(&s.activeCount, -1) == -1 {
 		close(s.lastActive)
 	}
 }
 
-func (s *PacketServer) logf(format string, args ...interface{}) {
-	if s.ErrorLog != nil {
-		s.ErrorLog.Printf(format, args...)
-	} else {
-		log.Printf(format, args...)
+func parseTcpPacket(r io.Reader, secret []byte) (*Packet, error) {
+	var header struct {
+		Code       uint8
+		Identifier uint8
+		Length     uint16
 	}
+
+	err := binary.Read(r, binary.BigEndian, &header)
+	if err != nil {
+		return nil, err
+	}
+
+	s := unsafe.Sizeof(header)
+	var data = make([]byte, header.Length-uint16(s))
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+
+	attrs, err := ParseAttributes(data[16:])
+	if err != nil {
+		return nil, err
+	}
+
+	packet := &Packet{
+		Code:       Code(header.Code),
+		Identifier: header.Identifier,
+		Secret:     secret,
+		Attributes: attrs,
+	}
+	copy(packet.Authenticator[:], data[0:16])
+	return packet, nil
 }
 
 // Serve accepts incoming connections on conn.
-func (s *PacketServer) Serve(conn net.PacketConn) error {
+func (s *RadsecPacketServer) Serve(conn net.Conn) error {
 	if s.Handler == nil {
-		return errors.New("radius: nil Handler")
+		return errors.New("radius: nil RadsecHandler")
 	}
 	if s.SecretSource == nil {
 		return errors.New("radius: nil SecretSource")
@@ -132,50 +161,28 @@ func (s *PacketServer) Serve(conn net.PacketConn) error {
 		s.activeDone()
 	}()
 
-	var buff [MaxPacketLength]byte
-	for {
-		n, remoteAddr, err := conn.ReadFrom(buff[:])
-		if err != nil {
-			if atomic.LoadInt32(&s.shutdownRequested) == 1 {
-				return ErrServerShutdown
-			}
+	r := bufio.NewReader(conn)
 
-			if ne, ok := err.(net.Error); ok && !ne.Temporary() {
+	secret, _ := s.SecretSource.RADIUSSecret(s.ctx, conn.RemoteAddr(), "")
+
+	for {
+		pkt, err := parseTcpPacket(r, secret)
+		if err != nil {
+			if err == io.EOF {
 				return err
 			}
-			s.logf("radius: could not read packet: %v", err)
+			if _, ok := err.(net.Error); ok {
+				return err
+			}
 			continue
 		}
 
 		s.activeAdd()
-		go func(buff []byte, remoteAddr net.Addr) {
+		go func(packet *Packet, conn net.Conn) {
 			defer s.activeDone()
 
-			packet, err := Parse(buff, defaultSecret)
-			if err != nil {
-				s.logf("radius: unable to parse packet: %v", err)
-				return
-			}
-
-			nasid := rfc2865.NASIdentifier_GetString(packet)
-			secret, err := s.SecretSource.RADIUSSecret(s.ctx, remoteAddr, nasid)
-			if err != nil {
-				s.logf("radius: error fetching from secret source: %v", err)
-				return
-			}
-
-			if len(secret) == 0 {
-				s.logf("radius: empty secret returned from secret source")
-				return
-			}
-
-			if !s.InsecureSkipVerify && !IsAuthenticRequest(buff, secret) {
-				s.logf("radius: packet validation failed; bad secret")
-				return
-			}
-
 			key := requestKey{
-				IP:         remoteAddr.String(),
+				IP:         conn.RemoteAddr().String(),
 				Identifier: packet.Identifier,
 			}
 
@@ -187,9 +194,9 @@ func (s *PacketServer) Serve(conn net.PacketConn) error {
 			requests[key] = struct{}{}
 			requestsLock.Unlock()
 
-			response := packetResponseWriter{
+			response := radsecPacketResponseWriter{
 				conn: conn,
-				addr: remoteAddr,
+				addr: conn.RemoteAddr(),
 			}
 
 			defer func() {
@@ -200,41 +207,57 @@ func (s *PacketServer) Serve(conn net.PacketConn) error {
 
 			request := Request{
 				LocalAddr:  conn.LocalAddr(),
-				RemoteAddr: remoteAddr,
+				RemoteAddr: conn.RemoteAddr(),
 				Packet:     packet,
-				ctx:        s.ctx,
 			}
 
 			s.Handler.ServeRADIUS(&response, &request)
-		}(append([]byte(nil), buff[:n]...), remoteAddr)
+		}(pkt, conn)
 	}
 }
 
 // ListenAndServe starts a RADIUS server on the address given in s.
-func (s *PacketServer) ListenAndServe() error {
+func (s *RadsecPacketServer) ListenAndServe(capath, crtfile, keyfile string) error {
+	crt, err := tls.LoadX509KeyPair(crtfile, keyfile)
+	if err != nil {
+		return err
+	}
+
+	tlsConfig := &tls.Config{}
+	tlsConfig.Certificates = []tls.Certificate{crt}
+	tlsConfig.Time = time.Now
+	tlsConfig.Rand = rand.Reader
+	tlsConfig.ClientAuth = tls.VerifyClientCertIfGiven
+
+	cabytes, _ := os.ReadFile(capath)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(cabytes)
+	tlsConfig.ClientCAs = pool
+
 	if s.Handler == nil {
-		return errors.New("radius: nil Handler")
+		return errors.New("radius: nil RadsecHandler")
 	}
 	if s.SecretSource == nil {
 		return errors.New("radius: nil SecretSource")
 	}
 
-	addrStr := ":1812"
+	addrStr := ":2083"
 	if s.Addr != "" {
 		addrStr = s.Addr
 	}
 
-	network := "udp"
-	if s.Network != "" {
-		network = s.Network
-	}
-
-	pc, err := net.ListenPacket(network, addrStr)
+	pc, err := tls.Listen("tcp", addrStr, tlsConfig)
 	if err != nil {
 		return err
 	}
 	defer pc.Close()
-	return s.Serve(pc)
+	for {
+		conn, err := pc.Accept()
+		if err != nil {
+			continue
+		}
+		go s.Serve(conn)
+	}
 }
 
 // Shutdown gracefully stops the server. It first closes all listeners and then
@@ -244,7 +267,7 @@ func (s *PacketServer) ListenAndServe() error {
 // returned if ctx is canceled.
 //
 // Any Serve methods return ErrShutdown after Shutdown is called.
-func (s *PacketServer) Shutdown(ctx context.Context) error {
+func (s *RadsecPacketServer) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	s.initLocked()
 	if atomic.CompareAndSwapInt32(&s.shutdownRequested, 0, 1) {

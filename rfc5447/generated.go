@@ -5,7 +5,7 @@ package rfc5447
 import (
 	"strconv"
 
-	"layeh.com/radius"
+	"github.com/talkincode/greenradius"
 )
 
 const (

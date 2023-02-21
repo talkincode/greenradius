@@ -3,8 +3,8 @@ package radius_test
 import (
 	"log"
 
-	"layeh.com/radius"
-	"layeh.com/radius/rfc2865"
+	radius "github.com/talkincode/greenradius"
+	"github.com/talkincode/greenradius/rfc2865"
 )
 
 var (

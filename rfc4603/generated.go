@@ -3,7 +3,7 @@
 package rfc4603
 
 import (
-	. "layeh.com/radius/rfc2865"
+	. "github.com/talkincode/greenradius/rfc2865"
 )
 
 func init() {

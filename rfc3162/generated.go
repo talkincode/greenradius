@@ -5,7 +5,7 @@ package rfc3162
 import (
 	"net"
 
-	"layeh.com/radius"
+	"github.com/talkincode/greenradius"
 )
 
 const (

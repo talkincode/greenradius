@@ -3,7 +3,7 @@
 package rfc6519
 
 import (
-	"layeh.com/radius"
+	"github.com/talkincode/greenradius"
 )
 
 const (
